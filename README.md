@@ -18,7 +18,8 @@ Robotics_Nuc/
 │   ├── 99-touchscreen.rules     # Udev rule untuk binding input touchscreen USB ke DP-2
 │   ├── edid-720p.bin            # Binary EDID 1280x720p 60Hz dari layar fisik MPI7002
 │   ├── monitors.xml             # Konfigurasi GNOME Display 720p untuk user & GDM
-│   └── sunshine.conf            # Konfigurasi Sunshine streaming server (VAAPI + X11)
+│   ├── sunshine.conf            # Konfigurasi Sunshine streaming server (VAAPI + X11)
+│   └── sunshine.service         # Systemd user unit (start setelah graphical-session)
 ├── scripts/
 │   └── setup_nuc.sh             # Skrip setup otomatis untuk NUC baru
 └── README.md
@@ -42,6 +43,7 @@ sudo ./scripts/setup_nuc.sh
 
 Skrip ini akan secara otomatis:
 - Menginstall driver Intel GPU non-free (`intel-media-va-driver-non-free`, `vainfo`).
+- Menginstall firmware Realtek Bluetooth (`linux-firmware-realtek`, `bluez`, `bluez-tools`) agar dongle Bluetooth eksternal langsung plug-and-play.
 - Menyalin firmware EDID `edid-720p.bin` ke `/lib/firmware/edid/`.
 - Memperbarui `initramfs` dan parameter kernel bootloader `GRUB` agar port `DP-2` dan `HDMI-A-1` dipaksa aktif di 1280x720@60Hz (`drm.edid_firmware`).
 - Mengaktifkan autologin GDM3 dan mematikan Wayland (menggunakan X11).
