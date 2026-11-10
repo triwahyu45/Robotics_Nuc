@@ -1,0 +1,1 @@
+ACTION=="add|change", SUBSYSTEM=="input", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5750", ENV{WL_OUTPUT}="DP-2", ENV{ID_INPUT_TOUCHSCREEN}="1"
