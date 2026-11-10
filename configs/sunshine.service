@@ -1,0 +1,12 @@
+[Unit]
+Description=Sunshine Moonlight Streaming Server
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/sunshine /home/abhinayanuc/.config/sunshine/sunshine.conf
+Restart=on-failure
+RestartSec=3s
+
+[Install]
+WantedBy=graphical-session.target
