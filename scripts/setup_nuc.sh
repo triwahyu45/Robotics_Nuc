@@ -30,7 +30,7 @@ echo "[+] Target User: ${TARGET_USER} (${TARGET_HOME})"
 # ------------------------------------------------------------------------------
 # 1. System Dependencies & Hardware Codecs
 # ------------------------------------------------------------------------------
-echo "[1/6] Installing dependencies and Intel GPU drivers..."
+echo "[1/6] Installing dependencies, Intel GPU drivers, and Bluetooth firmware..."
 apt-get update
 apt-get install -y \
     curl \
@@ -41,6 +41,9 @@ apt-get install -y \
     xdotool \
     imagemagick \
     feh \
+    bluez \
+    bluez-tools \
+    linux-firmware-realtek \
     vainfo \
     intel-media-va-driver-non-free \
     libva-drm2 \
