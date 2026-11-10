@@ -1,12 +1,15 @@
 [Unit]
 Description=Sunshine Moonlight Streaming Server
-After=graphical-session.target
-PartOf=graphical-session.target
+After=graphical.target default.target
+Wants=default.target
 
 [Service]
-ExecStart=/usr/bin/sunshine /home/abhinayanuc/.config/sunshine/sunshine.conf
+Type=simple
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/abhinayanuc/.Xauthority
+ExecStart=/home/abhinayanuc/.local/bin/sunshine-wrapper.sh
 Restart=on-failure
 RestartSec=3s
 
 [Install]
-WantedBy=graphical-session.target
+WantedBy=default.target
