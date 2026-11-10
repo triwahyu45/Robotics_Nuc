@@ -4,9 +4,11 @@ Repository ini berisi seluruh file konfigurasi, firmware EDID, udev rules, dan s
 
 Setup ini dirancang agar Intel NUC dapat beroperasi:
 1. **100% Headless (Tanpa Layar Fisik)** dengan resolusi terkunci di **1280x720p 60Hz**.
-2. **Seamless Mirroring**: Saat dicolokkan ke monitor touchscreen (MPI7002 / ByQDtech), tampilan langsung mirror tanpa black screen atau perubahan resolusi.
-3. **Touchscreen Calibration**: Pemetaan input USB touchscreen 1:1 ke layar display.
-4. **Ultra Low-Latency Remote Display**: Streaming desktop via **Sunshine + Moonlight** dengan hardware encoding Intel VAAPI (`hevc_vaapi`).
+2. **Anti-Disconnect & Seamless Mirroring**: Port `HDMI-1` dan `DP-2` dikunci dalam mode mirror 1280x720p. Dicolok atau dicabut monitor saat robot jalan **tidak akan memutuskan koneksi remote Moonlight**.
+3. **Touchscreen Calibration**: Pemetaan input USB touchscreen 1:1 ke layar display (`MPI7002 / ByQDtech`).
+4. **Ultra Low-Latency Remote Display**: Streaming desktop via **Sunshine + Moonlight** dengan hardware encoding Intel VAAPI (`hevc_vaapi`) dan zero-fail display check wrapper.
+5. **Bluetooth External Dongle**: Driver & firmware Realtek (`RTL8761BU`) aktif plug-and-play.
+6. **Built-in System Health & Task Manager**: CLI diagnostic tools (`btop`, `htop`, `iotop`, `nvme-cli`) untuk pantau CPU, RAM, suhu, dan kesehatan SSD.
 
 ---
 
@@ -17,93 +19,77 @@ Robotics_Nuc/
 ├── configs/
 │   ├── 99-touchscreen.rules     # Udev rule untuk binding input touchscreen USB ke DP-2
 │   ├── edid-720p.bin            # Binary EDID 1280x720p 60Hz dari layar fisik MPI7002
-│   ├── monitors.xml             # Konfigurasi GNOME Display 720p untuk user & GDM
+│   ├── monitors.xml             # Konfigurasi GNOME Display 720p Mirror untuk user & GDM
 │   ├── sunshine.conf            # Konfigurasi Sunshine streaming server (VAAPI + X11)
-│   └── sunshine.service         # Systemd user unit (start setelah graphical-session)
+│   └── sunshine.service         # Systemd user unit yang memanggil sunshine-wrapper
 ├── scripts/
-│   └── setup_nuc.sh             # Skrip setup otomatis untuk NUC baru
+│   ├── setup_nuc.sh             # Skrip 1-Click Setup Otomatis untuk NUC baru
+│   └── sunshine-wrapper.sh      # Skrip wrapper anti Error 503 (wait for X11 & lock mirror)
 └── README.md
 ```
 
 ---
 
-## 🚀 Cara Instalasi di Intel NUC Baru
+## 🚀 1-Click Setup di Intel NUC Baru
 
-### 1. Clone Repository
+Cukup jalankan satu perintah berikut di terminal NUC baru:
+
 ```bash
 git clone https://github.com/triwahyu45/Robotics_Nuc.git
 cd Robotics_Nuc
-```
-
-### 2. Jalankan Skrip Setup Otomatis
-```bash
 chmod +x scripts/setup_nuc.sh
 sudo ./scripts/setup_nuc.sh
 ```
 
-Skrip ini akan secara otomatis:
-- Menginstall driver Intel GPU non-free (`intel-media-va-driver-non-free`, `vainfo`).
-- Menginstall firmware Realtek Bluetooth (`linux-firmware-realtek`, `bluez`, `bluez-tools`) agar dongle Bluetooth eksternal langsung plug-and-play.
-- Menginstall utility monitoring performa & kesehatan SSD (`btop`, `htop`, `iotop`, `smartmontools`, `nvme-cli`).
-- Menyalin firmware EDID `edid-720p.bin` ke `/lib/firmware/edid/`.
-- Memperbarui `initramfs` dan parameter kernel bootloader `GRUB` agar port `DP-2` dan `HDMI-A-1` dipaksa aktif di 1280x720@60Hz (`drm.edid_firmware`).
-- Mengaktifkan autologin GDM3 dan mematikan Wayland (menggunakan X11).
-- Memasang Udev rules untuk touchscreen USB (`0483:5750`).
-- Memasang konfigurasi Sunshine VAAPI.
-
-### 3. Reboot NUC
+Lalu reboot NUC:
 ```bash
 sudo reboot
 ```
 
----
-
-## 📡 Konfigurasi Sunshine & Pairing ke Moonlight Laptop/Tablet
-
-### 1. Inisialisasi User/Password Web UI Sunshine
-Di terminal NUC:
-```bash
-sunshine --creds <username> <password>
-systemctl --user restart sunshine
-```
-
-### 2. Pairing Manual dengan Moonlight
-1. Buka aplikasi **Moonlight** di Laptop / Tablet.
-2. Klik tombol `+` (Add PC) lalu masukkan IP NUC (misal: `192.168.137.17` atau `192.168.0.104`).
-3. Klik icon komputer NUC (🔒). Moonlight akan menampilkan **4 digit PIN**.
-4. Buka browser di laptop:
-   ```
-   https://<IP_NUC>:47990/pin
-   ```
-5. Pilih perangkat kamu di menu dropdown, ketikkan 4 digit PIN, lalu klik **Send**.
-6. Status di Moonlight akan berubah menjadi unlocked dan siap di-stream via app **Desktop**.
-
-> [!IMPORTANT]
-> **Catatan Penting Sunshine Conf:**
-> Jangan pernah menambahkan opsi `flags = 0` di `sunshine.conf`. Di Sunshine, flag tersebut mengaktifkan `PIN_STDIN` yang memblokir permintaan pairing via Web UI browser.
+### ⚡ Apa yang Otomatis Dilakukan Skrip:
+- Menginstall driver Intel GPU non-free (`intel-media-va-driver-non-free`, `vainfo`).
+- Menginstall firmware Realtek Bluetooth (`linux-firmware-realtek`, `bluez`) agar dongle Bluetooth eksternal langsung aktif.
+- Menginstall tool monitoring sistem & disk health (`btop`, `htop`, `nvme-cli`, `smartmontools`).
+- Menyalin firmware EDID `edid-720p.bin` ke `/lib/firmware/edid/`.
+- Memperbarui `initramfs` dan parameter kernel bootloader `GRUB` agar port `DP-2` dan `HDMI-A-1` dipaksa aktif di 1280x720@60Hz (`drm.edid_firmware`).
+- Mengaktifkan autologin GDM3 dan mematikan Wayland (menggunakan X11).
+- Mengunci mode mirror 1280x720p permanen di level user dan GDM login screen (`monitors.xml`).
+- Memasang Udev rules untuk touchscreen USB (`0483:5750`).
+- Mengaktifkan wrapper service Sunshine (`sunshine-wrapper.sh`) agar tidak ada `Error 503`.
 
 ---
 
-## 🔧 Panduan Troubleshooting Cepat
+## 📡 Pairing Sunshine ke Moonlight di Laptop / Tablet
 
-- **Cek Status Service Sunshine**:
+Jika ingin menghubungkan laptop / tablet baru ke NUC:
+
+1. **Set Password Web UI Sunshine (jika belum):**
+   ```bash
+   sunshine --creds <username> <password>
+   systemctl --user restart sunshine
+   ```
+2. **Buka Moonlight di Laptop/Tablet:**
+   - Klik **Add Host (+)** -> Masukkan IP NUC (misal: `192.168.0.104` atau IP hotspot).
+   - Catat 4 angka PIN yang muncul di Moonlight.
+3. **Masukkan PIN ke Web UI Sunshine:**
+   - Buka browser: `https://<IP-NUC>:47990`
+   - Klik tab **PIN**, masukkan 4 angka tadi, lalu klik **Send**.
+4. **Selesai!** Klik icon **Desktop** di Moonlight untuk remote 1280x720p 60FPS ultra smooth.
+
+---
+
+## 📊 CLI Task Manager & Cek Kesehatan SSD / RAM
+
+Untuk memonitor status NUC saat robot beroperasi:
+
+- **Buka Task Manager Grafis di Terminal:**
   ```bash
-  systemctl --user status sunshine
+  btop
   ```
-- **Cek Deteksi Encoder Hardware Intel**:
+  *(Menampilkan grafik CPU per-core, penggunaan RAM, proses yang makan memory leak, kecepatan disk I/O, dan suhu).*
+
+- **Cek Kesehatan & Umur NVMe SSD NUC:**
   ```bash
-  vainfo --display drm --device /dev/dri/renderD128
+  sudo nvme smart-log /dev/nvme0n1
   ```
-- **Cek Status Layar Virtual DRM**:
-  ```bash
-  for f in /sys/class/drm/card*-*/status; do echo "$f: $(cat $f)"; done
-  ```
-  *(Output `DP-2` atau `HDMI-A-1` harus `connected` meskipun tidak ada monitor fisik dicolok).*
-- **Reset Pairing Cache jika Muncul Error "Incorrect PIN"**:
-  Di NUC:
-  ```bash
-  systemctl --user stop sunshine
-  rm -rf ~/.config/sunshine/credentials ~/.config/sunshine/sunshine_state.json
-  sunshine --creds <username> <password>
-  systemctl --user start sunshine
-  ```
+  *(Perhatikan `percentage_used`, `temperature`, dan `media_errors`).*

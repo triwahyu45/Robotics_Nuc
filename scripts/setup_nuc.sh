@@ -5,7 +5,10 @@
 #   1. Automatic Headless Virtual Display (1280x720p 60Hz) via Kernel DRM EDID
 #   2. Seamless Touchscreen USB Input Mapping (MPI7002 / ByQDtech)
 #   3. Low-Latency Remote Desktop Streaming via Sunshine (Intel VAAPI Hardware Acceleration)
-#   4. Network, SSH, and GDM Autologin Configuration
+#   4. Anti-Disconnect Hotplug Display Mirroring (HDMI-1 & DP-2 clone)
+#   5. Bluetooth External Dongle (Realtek RTL8761BU) Firmware Setup
+#   6. Task Manager / System Health Monitoring CLI Tools (btop, htop, nvme-cli)
+#   7. GDM Autologin & Systemd User Service with X11 Pre-Wait Wrapper
 # ==============================================================================
 
 set -euo pipefail
@@ -28,9 +31,9 @@ TARGET_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
 echo "[+] Target User: ${TARGET_USER} (${TARGET_HOME})"
 
 # ------------------------------------------------------------------------------
-# 1. System Dependencies & Hardware Codecs
+# 1. System Dependencies, GPU Codecs, Firmware & Monitoring Tools
 # ------------------------------------------------------------------------------
-echo "[1/6] Installing dependencies, GPU drivers, Bluetooth firmware, and monitoring tools..."
+echo "[1/7] Installing dependencies, GPU drivers, Bluetooth firmware, and monitoring tools..."
 apt-get update
 apt-get install -y \
     curl \
@@ -57,7 +60,7 @@ apt-get install -y \
 # ------------------------------------------------------------------------------
 # 2. Kernel DRM EDID & Headless Display Emulation (1280x720p 60Hz)
 # ------------------------------------------------------------------------------
-echo "[2/6] Configuring Kernel DRM EDID override for headless 720p display..."
+echo "[2/7] Configuring Kernel DRM EDID override for headless 720p display..."
 mkdir -p /lib/firmware/edid
 if [ -f "${CONFIG_DIR}/edid-720p.bin" ]; then
     cp "${CONFIG_DIR}/edid-720p.bin" /lib/firmware/edid/edid-720p.bin
@@ -80,7 +83,7 @@ fi
 # ------------------------------------------------------------------------------
 # 3. GDM Autologin & X11 Force Enable
 # ------------------------------------------------------------------------------
-echo "[3/6] Configuring GDM3 Autologin & X11..."
+echo "[3/7] Configuring GDM3 Autologin & X11..."
 GDM_CUSTOM="/etc/gdm3/custom.conf"
 if [ -f "$GDM_CUSTOM" ]; then
     sed -i "s/#  AutomaticLoginEnable = true/AutomaticLoginEnable = true/" "$GDM_CUSTOM"
@@ -88,7 +91,7 @@ if [ -f "$GDM_CUSTOM" ]; then
     sed -i "s/#WaylandEnable=false/WaylandEnable=false/" "$GDM_CUSTOM"
 fi
 
-# Copy default monitors.xml for GNOME user and GDM
+# Copy default monitors.xml for GNOME user and GDM (Fixed 1280x720 Mirror Mode)
 if [ -f "${CONFIG_DIR}/monitors.xml" ]; then
     mkdir -p "${TARGET_HOME}/.config"
     cp "${CONFIG_DIR}/monitors.xml" "${TARGET_HOME}/.config/monitors.xml"
@@ -102,35 +105,63 @@ fi
 # ------------------------------------------------------------------------------
 # 4. Touchscreen USB Mapping Udev Rule
 # ------------------------------------------------------------------------------
-echo "[4/6] Setting up Touchscreen Udev rules..."
+echo "[4/7] Setting up Touchscreen Udev rules..."
 if [ -f "${CONFIG_DIR}/99-touchscreen.rules" ]; then
     cp "${CONFIG_DIR}/99-touchscreen.rules" /etc/udev/rules.d/99-touchscreen.rules
     udevadm control --reload-rules && udevadm trigger
 fi
 
 # ------------------------------------------------------------------------------
-# 5. Sunshine GameStream Server Setup
+# 5. Sunshine GameStream Server Setup & Wrapper Script
 # ------------------------------------------------------------------------------
-echo "[5/6] Configuring Sunshine streaming server..."
+echo "[5/7] Configuring Sunshine streaming server & wait-for-display wrapper..."
 SUNSHINE_CONF_DIR="${TARGET_HOME}/.config/sunshine"
 mkdir -p "$SUNSHINE_CONF_DIR"
 
 if [ -f "${CONFIG_DIR}/sunshine.conf" ]; then
     cp "${CONFIG_DIR}/sunshine.conf" "${SUNSHINE_CONF_DIR}/sunshine.conf"
-    chown -R "${TARGET_USER}:${TARGET_USER}" "${TARGET_HOME}/.config/sunshine"
+    chown -R "${TARGET_USER}:${TARGET_USER}" "${SUNSHINE_CONF_DIR}"
+fi
+
+# Install Sunshine Wrapper
+mkdir -p "${TARGET_HOME}/.local/bin"
+if [ -f "${SCRIPT_DIR}/sunshine-wrapper.sh" ]; then
+    cp "${SCRIPT_DIR}/sunshine-wrapper.sh" "${TARGET_HOME}/.local/bin/sunshine-wrapper.sh"
+    chmod +x "${TARGET_HOME}/.local/bin/sunshine-wrapper.sh"
+    chown -R "${TARGET_USER}:${TARGET_USER}" "${TARGET_HOME}/.local/bin"
+fi
+
+# Install Sunshine Systemd User Service
+SYSTEMD_USER_DIR="${TARGET_HOME}/.config/systemd/user"
+mkdir -p "$SYSTEMD_USER_DIR"
+if [ -f "${CONFIG_DIR}/sunshine.service" ]; then
+    cp "${CONFIG_DIR}/sunshine.service" "${SYSTEMD_USER_DIR}/sunshine.service"
+    chown -R "${TARGET_USER}:${TARGET_USER}" "${SYSTEMD_USER_DIR}"
 fi
 
 # Ensure user lingering is enabled for systemd user services
 loginctl enable-linger "${TARGET_USER}"
 
 # ------------------------------------------------------------------------------
-# 6. Sunshine Cap Permissions & Udev
+# 6. Sunshine Cap Permissions & Systemd User Service Activation
 # ------------------------------------------------------------------------------
-echo "[6/6] Applying Sunshine permissions..."
+echo "[6/7] Applying Sunshine capabilities and enabling service..."
 setcap cap_sys_admin+p $(which sunshine 2>/dev/null || echo "/usr/bin/sunshine") 2>/dev/null || true
+
+# Enable and start Sunshine user service as target user
+su - "${TARGET_USER}" -c "systemctl --user daemon-reload && systemctl --user enable sunshine.service && systemctl --user restart sunshine.service" || true
+
+# ------------------------------------------------------------------------------
+# 7. Bluetooth External Adapter Service Setup
+# ------------------------------------------------------------------------------
+echo "[7/7] Enabling Bluetooth service and powering adapter..."
+systemctl enable bluetooth
+systemctl restart bluetooth
+bluetoothctl power on 2>/dev/null || true
 
 echo "=========================================="
 echo " Setup Finished Successfully!"
-echo " Please reboot the NUC to apply kernel display parameters:"
+echo " All configurations (Mirror 720p, Headless, Sunshine, Bluetooth, btop) are active."
+echo " Please reboot the NUC to finalize early-boot kernel display parameters:"
 echo "   sudo reboot"
 echo "=========================================="
