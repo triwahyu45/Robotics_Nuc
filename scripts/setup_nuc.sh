@@ -155,6 +155,10 @@ su - "${TARGET_USER}" -c "systemctl --user daemon-reload && systemctl --user ena
 # 7. Bluetooth External Adapter Service Setup
 # ------------------------------------------------------------------------------
 echo "[7/7] Enabling Bluetooth service and powering adapter..."
+# Ensure Avahi mDNS broadcasts hostname across network changes
+sed -i 's/#publish-workstation=no/publish-workstation=yes/' /etc/avahi/avahi-daemon.conf 2>/dev/null || true
+systemctl restart avahi-daemon
+
 systemctl enable bluetooth
 systemctl restart bluetooth
 bluetoothctl power on 2>/dev/null || true
